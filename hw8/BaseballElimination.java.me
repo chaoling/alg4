@@ -1,0 +1,245 @@
+import java.util.List;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.HashMap;
+
+public class BaseballElimination {
+    private int mNumOfTeams;
+    private Team[] mTeams;
+    private String[] mTeamNames;
+    private Map<String, Team> mSymTbl;
+    // serve as a cache of the results
+    // 0 means no, 1 means yes, -1 means not visited.
+    private int[]  mEliminated;
+    
+
+public BaseballElimination(String filename) {
+// create a baseball division from given filename in format specified below
+    In in = new In(filename);
+    if (in.hasNextLine()) {
+        mNumOfTeams = Integer.parseInt(in.readLine());
+    }
+    if (mNumOfTeams <= 0) {
+        throw new IllegalArgumentException("number of teams should be positive");
+    }
+    mTeams = new Team[mNumOfTeams];
+    mSymTbl = new HashMap<String, Team>();
+    mTeamNames = new String[mNumOfTeams];
+    mEliminated = new int[mNumOfTeams];
+    int i = 0;
+    while (in.hasNextLine()) {
+        String line = in.readLine();
+        if (line != null) {
+        mTeams[i] = new Team(i, line);
+        mSymTbl.put(mTeams[i].getName(), mTeams[i]);
+        mTeamNames[i] = mTeams[i].getName();
+        mEliminated[i] = -1;
+        i++;
+        }
+    }
+}
+
+public int numberOfTeams() {
+// number of teams
+   return mNumOfTeams;
+}
+
+public Iterable<String> teams() {
+// all teams
+   return mSymTbl.keySet();
+}
+
+public int wins(String team) {
+// number of wins for given team
+   Team tm = mSymTbl.get(team);
+   if (tm == null) {
+       throw new IllegalArgumentException("team does not exists!");
+   }
+   return tm.getWin();
+}
+
+public int losses(String team) {
+// number of losses for given team
+   Team tm = mSymTbl.get(team);
+   if (tm == null) {
+       throw new IllegalArgumentException("team does not exists!");
+   }
+   return tm.getLoss();
+}
+
+public int remaining(String team) {
+// number of remaining games for given team
+   Team tm = mSymTbl.get(team);
+   if (tm == null) {
+       throw new IllegalArgumentException("team does not exists!");
+   }
+   return tm.getRemaining();
+}
+
+public int against(String team1, String team2) {
+// number of remaining games between team1 and team2
+   Team tm1 = mSymTbl.get(team1);
+   Team tm2 = mSymTbl.get(team2);
+   if (tm1 == null || tm2 == null) {
+       throw new IllegalArgumentException("team does not exists!");
+   }
+   return tm1.getOpponents()[tm2.getId()];
+}
+
+public boolean isEliminated(String team) {
+   // is given team eliminated?
+   Team tm = mSymTbl.get(team);
+   if (tm == null) {
+       throw new IllegalArgumentException("team does not exists!");
+   }
+   if (numberOfTeams() <= 1) {
+       return false;
+   }
+   int res = mEliminated[tm.getId()];
+   if (res != -1) {
+       if (res == 0) {
+          return false;
+       } 
+       return true;
+   }
+   
+   if (testTrivalElimination(team)) {
+       mEliminated[tm.getId()] = 1;
+       return true;
+   }
+   
+   FlowNetwork fn = constructFlowNetwork(team);
+   StdOut.println(fn);
+   int s = fn.V() - 2;
+   int t = fn.V() - 1;
+   new FordFulkerson(fn, s, t);
+   for (FlowEdge e : fn.adj(s)) {
+        if (e.flow() != e.capacity())
+            mEliminated[tm.getId()] = 1;
+            return true;
+   }
+   mEliminated[tm.getId()] = 0;
+   return false;
+}
+
+public Iterable<String> certificateOfElimination(String team) {
+  // subset R of teams that eliminates given team; null if not eliminated
+   Team ctm = mSymTbl.get(team);
+   if (ctm == null) {
+       throw new IllegalArgumentException("team does not exists!");
+   }
+   if (!isEliminated(team)) {
+       return null;
+   }
+   List<String> teams = new ArrayList<String>();
+   //test trival case first:
+   for (Team tm : getTeams()) {
+       //w[x] + r[x] < w[i]
+       if (ctm.getWin() + ctm.getRemaining() < tm.getWin()) {
+          teams.add(tm.getName()); 
+       }
+   }
+   if (teams.size() > 0) {
+       return teams;
+   }
+   
+   //Now consider non-trival case:
+   FlowNetwork fn = constructFlowNetwork(team);
+   //StdOut.println(fn);
+   int s = fn.V() - 2;
+   int t = fn.V() - 1;
+   boolean isEliminated = false;
+   FordFulkerson ff = new FordFulkerson(fn, s, t);
+   for (FlowEdge e : fn.adj(s)) {
+       if (e.flow() != e.capacity()) {
+            mEliminated[ctm.getId()] = 1;
+            isEliminated = true;
+            break;
+       }
+   }
+   
+   if (!isEliminated) {
+       return null;
+   } else {
+       int numOfMatches = numberOfTeams() * (numberOfTeams()-1) /2;
+       teams = new ArrayList<String>();
+       for (int i = numOfMatches; i < numOfMatches + numberOfTeams() - 1; i++) {
+           if (ff.inCut(i)) {
+               teams.add(this.mTeamNames[i - numOfMatches]);
+           }
+       }
+       return teams;
+   }
+}
+
+private Team[] getTeams() {
+    return mTeams;
+}
+
+public static void main(String[] args) {
+    BaseballElimination division = new BaseballElimination(args[0]);
+    for (int i = 0; i < division.mNumOfTeams; i++) {
+        System.out.println(division.getTeams()[i]);
+    }
+    for (String team : division.teams()) {
+        if (division.isEliminated(team)) {
+            StdOut.print(team + " is eliminated by the subset R = { ");
+            for (String t : division.certificateOfElimination(team)) {
+                StdOut.print(t + " ");
+            }
+            StdOut.println("}");
+        }
+        else {
+            StdOut.println(team + " is not eliminated");
+        }
+    }
+}
+
+private FlowNetwork constructFlowNetwork(String teamName) {
+    Team ctm = mSymTbl.get(teamName);
+    if (ctm == null) {
+       throw new IllegalArgumentException("team does not exists!");
+    }
+    int tIndex = ctm.getId();
+    int numOfMatches = numberOfTeams() * (numberOfTeams()-1) /2;
+    int V = numOfMatches + numberOfTeams() + 2;
+    int t = V - 1;
+    int s = V - 2;
+    FlowNetwork G = new FlowNetwork(V);
+    int v = 0; //match node + team node + s + t
+    int row = 0;
+    for (Team tm : getTeams()) {
+        if (tm.getName().equals(ctm.getName())) continue;
+        int[] op = tm.getOpponents();
+        for (int col = row + 1; col < op.length; col++) {
+            //only look upper triangle non zero item excluding ctm
+            if (col == tIndex || op[col] == 0) continue;
+            //add match to source edges
+            G.addEdge(new FlowEdge(s, v, op[col]));
+            // add match to team edges
+            G.addEdge(new FlowEdge(v, numOfMatches + row, 
+                               Integer.MAX_VALUE));
+            G.addEdge(new FlowEdge(v, numOfMatches + col, 
+                               Integer.MAX_VALUE));
+            v++;
+        }
+        G.addEdge(new FlowEdge(numOfMatches + row, t, Math.max(0, 
+                              ctm.getWin() + ctm.getRemaining() - tm.getWin()))); 
+    }
+    return G;
+}
+
+private boolean testTrivalElimination(String teamName) {
+    Team ctm = mSymTbl.get(teamName);
+    if (ctm == null) {
+       throw new IllegalArgumentException("team does not exists!");
+    }
+    for (Team tm : getTeams()) {
+       //w[x] + r[x] < w[i]
+       if (ctm.getWin() + ctm.getRemaining() < tm.getWin()) {
+           return true;
+       }
+    }
+    return false;
+}
+}

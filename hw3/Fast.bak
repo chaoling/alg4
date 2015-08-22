@@ -1,0 +1,121 @@
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Set;
+    
+public class Fast {
+    public static void main(String[] args) {
+        In in = new In(args[0]);      // input file
+        int N = in.readInt();         // will throw NumberFormatException
+        Point[] pts = new Point[N];
+        int i = 0;
+ 
+        StdDraw.clear();
+        StdDraw.setPenColor(StdDraw.RED);
+        StdDraw.setPenRadius(0.006);
+        int xmax = 0;
+        int ymax = 0;
+        
+        while (!in.isEmpty()) {
+            int xcoord = in.readInt();
+            int ycoord = in.readInt();
+            if (xcoord > xmax) xmax = xcoord;
+            if (ycoord > ymax) ymax = ycoord;
+            pts[i] = new Point(xcoord, ycoord);
+            i++;
+        }
+        StdDraw.setXscale(0, xmax+1);
+        StdDraw.setYscale(0, ymax+1);
+        for (i = 0; i < pts.length; i++) {
+            pts[i].draw();
+        }
+        assert (i == N);
+        //printLine(pts);
+        fastSolver(pts);
+        
+    }
+    
+    private static void printLine(Point[] pts) {
+     assert (pts != null);
+     StringBuilder str = new StringBuilder();
+     int i;
+     for (i = 0; i < pts.length-1; i++) {
+         str.append(pts[i]);
+         str.append(" --> ");
+     }
+     str.append(pts[i]);
+     System.out.println(str.toString());
+    }
+    
+    private static void fastSolver(Point[] pts) {
+         if (pts == null || pts.length < 4) {
+            return;
+        }
+        //first make a clone
+        Point[] ptsCopy = new Point[pts.length]; 
+        for (int i = 0; i < pts.length; i++) {
+            ptsCopy[i] = pts[i];
+        }
+        assert (pts.length == ptsCopy.length);
+        Set<Point[]> ps = new HashSet<Point[]>();
+        int size = 0;
+        for (int i = 0; i < pts.length; i++) {
+            //sort the pts according to the slope wrt. to the current point:
+            //merge sort takes NlogN running time
+            //System.out.println("====== "+pts[i]+" =======");
+            Arrays.sort(ptsCopy, pts[i].SLOPE_ORDER);
+            double prevSlope = pts[i].slopeTo(ptsCopy[0]); //in Acsending order
+            //System.out.println(pts[i]+" --> "+ptsCopy[0]+" slope: "+prevSlope);
+            //first point after sorting is always itself.
+            assert (pts[i] == ptsCopy[0]); 
+            int count = 1; //counter to count number of coliner points
+            for (int j = 1; j < ptsCopy.length; j++) {
+                double currSlope = pts[i].slopeTo(ptsCopy[j]);
+                //System.out.println(pts[i]+" --> "+ptsCopy[j]+" slope: "+currSlope);
+                if (prevSlope != currSlope) {
+                    prevSlope = currSlope;
+                    if (count >= 3) {
+                        Point[] coliner = new Point[count+1];
+                        for (int c = count; c > 0; c--) {
+                             //exclued current point, which changes the slope.
+                             coliner[c] =  ptsCopy[j-count+c-1]; 
+                        }
+                        coliner[0] = pts[i];
+                        //System.out.println("solution space is :"+coliner.length);
+                        Arrays.sort(coliner); // sort the candidate by natual order
+                        size = ps.size();
+                        ps.add(coliner);
+                        if (size+1 == ps.size()) {
+                            printLine(coliner);
+                            drawLine(coliner);
+                        }
+                    }
+                    count = 1;
+                } else {
+                    count++;
+                }
+                
+            } 
+         }
+    }
+    
+    private static boolean isColliner(Point[] pts) {
+        assert (pts != null);
+        assert (pts.length >= 2);
+        double slope = pts[0].slopeTo(pts[1]);
+        for (int i = 2; i < pts.length; i++) {
+            if (slope != pts[0].slopeTo(pts[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+    
+     private static void drawLine(Point[] pts) {
+        assert (pts != null);
+        assert (pts.length >= 2);
+        StdDraw.setPenColor(StdDraw.BLACK);
+        StdDraw.setPenRadius(0.003);
+        Arrays.sort(pts);
+        pts[0].drawTo(pts[pts.length-1]);
+    }
+}

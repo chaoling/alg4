@@ -1,0 +1,14 @@
+move-to-front encoding...
+A
+B
+R
+A
+C
+A
+D
+A
+B
+R
+A
+!
+ABRDE&
